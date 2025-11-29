@@ -13,7 +13,7 @@
 #include <zephyr/dt-bindings/input/input-event-codes.h>
 
 #include <zmk/keymap.h>
-#include <zmk/input_processors.h>
+#include <drivers/input_processor.h>
 #include <zmk/events/position_state_changed.h>
 
 LOG_MODULE_DECLARE(zmk, CONFIG_ZMK_LOG_LEVEL);
@@ -22,6 +22,7 @@ LOG_MODULE_DECLARE(zmk, CONFIG_ZMK_LOG_LEVEL);
 
 struct threshold_temp_layer_config {
     int16_t require_prior_idle_ms;
+    int32_t activation_threshold;
     uint8_t excluded_positions_len;
     uint8_t excluded_positions[];
 };
@@ -72,14 +73,14 @@ static void layer_disable_work_handler(struct k_work *work) {
 
 static int threshold_temp_layer_handle_event(const struct device *dev,
                                             struct input_event *event,
-                                            uint32_t param1, uint32_t param2, uint32_t param3,
+                                            uint32_t param1, uint32_t param2,
                                             struct zmk_input_processor_state *state) {
     struct threshold_temp_layer_data *data = dev->data;
     const struct threshold_temp_layer_config *cfg = dev->config;
 
     uint8_t layer = (uint8_t)param1;
     int16_t timeout = (int16_t)param2;
-    int activation_threshold = (int)param3;
+    int activation_threshold = cfg->activation_threshold;
 
     if (layer >= MAX_LAYERS) {
         return 0;
@@ -176,12 +177,17 @@ static int threshold_temp_layer_init(const struct device *dev) {
     return 0;
 }
 
+static struct zmk_input_processor_driver_api threshold_temp_layer_driver_api = {
+    .handle_event = threshold_temp_layer_handle_event,
+};
+
 #define THRESHOLD_TEMP_LAYER_INST(n)                                                         \
     BUILD_ASSERT(DT_INST_PROP_LEN(n, excluded_positions) <= UINT8_MAX,                    \
                  "excluded-positions must have at most " #UINT8_MAX " items");             \
     static uint8_t excluded_positions_##n[] = DT_INST_PROP(n, excluded_positions);          \
     static const struct threshold_temp_layer_config threshold_temp_layer_config_##n = {     \
         .require_prior_idle_ms = DT_INST_PROP(n, require_prior_idle_ms),                   \
+        .activation_threshold = DT_INST_PROP(n, activation_threshold),                     \
         .excluded_positions_len = DT_INST_PROP_LEN(n, excluded_positions),                 \
         .excluded_positions = excluded_positions_##n,                                       \
     };                                                                                       \
@@ -189,7 +195,7 @@ static int threshold_temp_layer_init(const struct device *dev) {
     DEVICE_DT_INST_DEFINE(n, threshold_temp_layer_init, NULL,                              \
                           &threshold_temp_layer_data_##n,                                   \
                           &threshold_temp_layer_config_##n,                                 \
-                          POST_KERNEL, CONFIG_KERNEL_INIT_PRIORITY_DEFAULT, NULL);         \
-    ZMK_INPUT_PROCESSOR_DEFINE(n, threshold_temp_layer_handle_event);
+                          POST_KERNEL, CONFIG_KERNEL_INIT_PRIORITY_DEFAULT,                 \
+                          &threshold_temp_layer_driver_api);
 
 DT_INST_FOREACH_STATUS_OKAY(THRESHOLD_TEMP_LAYER_INST)

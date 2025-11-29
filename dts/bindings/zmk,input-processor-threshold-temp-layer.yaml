@@ -13,7 +13,7 @@ properties:
   "#input-processor-cells":
     type: int
     required: true
-    const: 3
+    const: 2
 
   activation-threshold:
     type: int
@@ -39,4 +39,3 @@ properties:
 input-processor-cells:
   - param1
   - param2
-  - param3
