@@ -20,27 +20,23 @@ LOG_MODULE_DECLARE(zmk, CONFIG_ZMK_LOG_LEVEL);
 
 #define MAX_LAYERS 16
 
-// Configuration for each processor instance
 struct threshold_temp_layer_config {
     int16_t require_prior_idle_ms;
     uint8_t excluded_positions_len;
     uint8_t excluded_positions[];
 };
 
-// State data for each layer
 struct threshold_temp_layer_layer_data {
     int32_t accumulated_distance;
     bool active;
     struct k_work_delayable disable_work;
 };
 
-// State data for each processor instance
 struct threshold_temp_layer_data {
     int64_t last_tap_time;
     struct threshold_temp_layer_layer_data layers[MAX_LAYERS];
 };
 
-// Calculate distance from dx, dy using integer approximation
 static int calculate_distance(int dx, int dy) {
     int abs_dx = abs(dx);
     int abs_dy = abs(dy);
@@ -49,17 +45,22 @@ static int calculate_distance(int dx, int dy) {
     return max_val + (min_val >> 1);
 }
 
-// Work handler to disable layer after timeout
+struct layer_disable_work_data {
+    const struct device *dev;
+    uint8_t layer;
+};
+
 static void layer_disable_work_handler(struct k_work *work) {
     struct k_work_delayable *d_work = k_work_delayable_from_work(work);
     struct threshold_temp_layer_layer_data *layer_data =
         CONTAINER_OF(d_work, struct threshold_temp_layer_layer_data, disable_work);
 
-    // Find which layer this is
-    for (int i = 0; i < MAX_LAYERS; i++) {
-        const struct device *dev = DEVICE_DT_INST_GET(0);
-        struct threshold_temp_layer_data *data = dev->data;
+    // This is a bit hacky - we need to find the device and layer index
+    // Since we can't easily pass additional context, we iterate
+    const struct device *dev = DEVICE_DT_INST_GET(0);
+    struct threshold_temp_layer_data *data = dev->data;
 
+    for (int i = 0; i < MAX_LAYERS; i++) {
         if (&data->layers[i] == layer_data && layer_data->active) {
             layer_data->active = false;
             layer_data->accumulated_distance = 0;
@@ -69,7 +70,6 @@ static void layer_disable_work_handler(struct k_work *work) {
     }
 }
 
-// Process input events
 static int threshold_temp_layer_handle_event(const struct device *dev,
                                             struct input_event *event,
                                             uint32_t param1, uint32_t param2, uint32_t param3,
@@ -87,7 +87,6 @@ static int threshold_temp_layer_handle_event(const struct device *dev,
 
     struct threshold_temp_layer_layer_data *layer_data = &data->layers[layer];
 
-    // Check if we should ignore activation due to recent key press
     if (!layer_data->active && cfg->require_prior_idle_ms > 0) {
         int64_t now = k_uptime_get();
         if ((now - data->last_tap_time) < cfg->require_prior_idle_ms) {
@@ -95,7 +94,6 @@ static int threshold_temp_layer_handle_event(const struct device *dev,
         }
     }
 
-    // Process relative movement events
     if (event->type == INPUT_EV_REL) {
         if (event->code == INPUT_REL_X || event->code == INPUT_REL_Y) {
             static int pending_dx = 0;
@@ -107,23 +105,19 @@ static int threshold_temp_layer_handle_event(const struct device *dev,
                 pending_dy = event->value;
             }
 
-            // Accumulate distance when layer is not active
             if (!layer_data->active) {
                 int distance = calculate_distance(pending_dx, pending_dy);
                 layer_data->accumulated_distance += distance;
 
-                // Check if threshold is reached
                 if (layer_data->accumulated_distance >= activation_threshold) {
                     layer_data->active = true;
                     zmk_keymap_layer_activate(layer);
                 }
             }
 
-            // Reset pending values
             pending_dx = 0;
             pending_dy = 0;
 
-            // Reschedule timeout if layer is active
             if (layer_data->active && timeout > 0) {
                 k_work_reschedule(&layer_data->disable_work, K_MSEC(timeout));
             }
@@ -133,7 +127,6 @@ static int threshold_temp_layer_handle_event(const struct device *dev,
     return 0;
 }
 
-// Event listener for key presses
 static int handle_position_state_changed(const struct zmk_event_header *eh) {
     struct zmk_position_state_changed *ev = as_zmk_position_state_changed(eh);
     if (ev == NULL) {
@@ -144,18 +137,15 @@ static int handle_position_state_changed(const struct zmk_event_header *eh) {
     const struct threshold_temp_layer_config *cfg = dev->config;
     struct threshold_temp_layer_data *data = dev->data;
 
-    // Check if this position is excluded
     for (int i = 0; i < cfg->excluded_positions_len; i++) {
         if (cfg->excluded_positions[i] == ev->position) {
             return 0;
         }
     }
 
-    // Update last tap time
     if (ev->state) {
         data->last_tap_time = k_uptime_get();
 
-        // Deactivate all active layers
         for (int i = 0; i < MAX_LAYERS; i++) {
             if (data->layers[i].active) {
                 data->layers[i].active = false;
@@ -172,7 +162,6 @@ static int handle_position_state_changed(const struct zmk_event_header *eh) {
 ZMK_LISTENER(threshold_temp_layer, handle_position_state_changed);
 ZMK_SUBSCRIPTION(threshold_temp_layer, zmk_position_state_changed);
 
-// Initialization
 static int threshold_temp_layer_init(const struct device *dev) {
     struct threshold_temp_layer_data *data = dev->data;
 
@@ -187,13 +176,14 @@ static int threshold_temp_layer_init(const struct device *dev) {
     return 0;
 }
 
-// Device instantiation
 #define THRESHOLD_TEMP_LAYER_INST(n)                                                         \
+    BUILD_ASSERT(DT_INST_PROP_LEN(n, excluded_positions) <= UINT8_MAX,                    \
+                 "excluded-positions must have at most " #UINT8_MAX " items");             \
     static uint8_t excluded_positions_##n[] = DT_INST_PROP(n, excluded_positions);          \
     static const struct threshold_temp_layer_config threshold_temp_layer_config_##n = {     \
         .require_prior_idle_ms = DT_INST_PROP(n, require_prior_idle_ms),                   \
         .excluded_positions_len = DT_INST_PROP_LEN(n, excluded_positions),                 \
-        .excluded_positions = {[0 ...(DT_INST_PROP_LEN(n, excluded_positions) - 1)] = 0},  \
+        .excluded_positions = excluded_positions_##n,                                       \
     };                                                                                       \
     static struct threshold_temp_layer_data threshold_temp_layer_data_##n = {};             \
     DEVICE_DT_INST_DEFINE(n, threshold_temp_layer_init, NULL,                              \
