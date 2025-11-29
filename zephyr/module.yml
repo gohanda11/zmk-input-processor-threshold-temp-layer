@@ -1,3 +1,4 @@
 name: zmk-input-processor-threshold-temp-layer
-cmake-ext: True
-kconfig-ext: True
+build:
+  cmake-ext: true
+  kconfig-ext: true
