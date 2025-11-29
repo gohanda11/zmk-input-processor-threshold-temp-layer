@@ -7,9 +7,14 @@ description: |
 
 compatible: "zmk,input-processor-threshold-temp-layer"
 
-include: ip_two_param.yaml
+include: ip_common.yaml
 
 properties:
+  "#input-processor-cells":
+    type: int
+    required: true
+    const: 3
+
   activation-threshold:
     type: int
     default: 0
@@ -30,3 +35,8 @@ properties:
     description: |
       An array of key position indices that will not trigger deactivation of the layer
       once it is active. Useful for keeping layer active when pressing mouse buttons.
+
+input-processor-cells:
+  - param1
+  - param2
+  - param3
