@@ -1,0 +1,32 @@
+# Copyright (c) 2024 The ZMK Contributors
+# SPDX-License-Identifier: MIT
+
+description: |
+  Input Processor for temporarily enabling a layer after input events,
+  with activation threshold based on accumulated movement distance.
+
+compatible: "zmk,input-processor-threshold-temp-layer"
+
+include: ip_two_param.yaml
+
+properties:
+  activation-threshold:
+    type: int
+    default: 0
+    description: |
+      Minimum accumulated movement distance (in pixels) required to activate the layer.
+      If 0, the layer activates immediately on any movement (same as standard temp-layer).
+
+  require-prior-idle-ms:
+    type: int
+    default: 0
+    description: |
+      Only activate the layer if there have not been any key presses for at least
+      the set number of milliseconds before the pointing device event.
+
+  excluded-positions:
+    type: array
+    default: []
+    description: |
+      An array of key position indices that will not trigger deactivation of the layer
+      once it is active. Useful for keeping layer active when pressing mouse buttons.
