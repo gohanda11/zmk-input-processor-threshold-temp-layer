@@ -6,6 +6,7 @@
 
 #define DT_DRV_COMPAT zmk_input_processor_threshold_temp_layer
 
+#include <stdlib.h>
 #include <zephyr/device.h>
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
@@ -13,6 +14,7 @@
 #include <zephyr/dt-bindings/input/input-event-codes.h>
 
 #include <zmk/keymap.h>
+#include <zmk/event_manager.h>
 #include <drivers/input_processor.h>
 #include <zmk/events/position_state_changed.h>
 
@@ -128,7 +130,7 @@ static int threshold_temp_layer_handle_event(const struct device *dev,
     return 0;
 }
 
-static int handle_position_state_changed(const struct zmk_event_header *eh) {
+static int handle_position_state_changed(const zmk_event_t *eh) {
     struct zmk_position_state_changed *ev = as_zmk_position_state_changed(eh);
     if (ev == NULL) {
         return 0;
@@ -183,7 +185,7 @@ static struct zmk_input_processor_driver_api threshold_temp_layer_driver_api = {
 
 #define THRESHOLD_TEMP_LAYER_INST(n)                                                         \
     BUILD_ASSERT(DT_INST_PROP_LEN(n, excluded_positions) <= UINT8_MAX,                    \
-                 "excluded-positions must have at most " #UINT8_MAX " items");             \
+                 "excluded-positions must have at most 255 items");                        \
     static uint8_t excluded_positions_##n[] = DT_INST_PROP(n, excluded_positions);          \
     static const struct threshold_temp_layer_config threshold_temp_layer_config_##n = {     \
         .require_prior_idle_ms = DT_INST_PROP(n, require_prior_idle_ms),                   \
