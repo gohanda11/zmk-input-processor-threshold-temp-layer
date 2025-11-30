@@ -25,8 +25,8 @@ LOG_MODULE_DECLARE(zmk, CONFIG_ZMK_LOG_LEVEL);
 struct threshold_temp_layer_config {
     int16_t require_prior_idle_ms;
     int32_t activation_threshold;
-    uint8_t excluded_positions_len;
-    uint8_t excluded_positions[];
+    const uint8_t *excluded_positions;
+    size_t excluded_positions_len;
 };
 
 struct threshold_temp_layer_layer_data {
@@ -186,12 +186,12 @@ static struct zmk_input_processor_driver_api threshold_temp_layer_driver_api = {
 #define THRESHOLD_TEMP_LAYER_INST(n)                                                         \
     BUILD_ASSERT(DT_INST_PROP_LEN(n, excluded_positions) <= UINT8_MAX,                    \
                  "excluded-positions must have at most 255 items");                        \
-    static uint8_t excluded_positions_##n[] = DT_INST_PROP(n, excluded_positions);          \
+    static const uint8_t excluded_positions_##n[] = DT_INST_PROP(n, excluded_positions);    \
     static const struct threshold_temp_layer_config threshold_temp_layer_config_##n = {     \
         .require_prior_idle_ms = DT_INST_PROP(n, require_prior_idle_ms),                   \
         .activation_threshold = DT_INST_PROP(n, activation_threshold),                     \
-        .excluded_positions_len = DT_INST_PROP_LEN(n, excluded_positions),                 \
         .excluded_positions = excluded_positions_##n,                                       \
+        .excluded_positions_len = DT_INST_PROP_LEN(n, excluded_positions),                 \
     };                                                                                       \
     static struct threshold_temp_layer_data threshold_temp_layer_data_##n = {};             \
     DEVICE_DT_INST_DEFINE(n, threshold_temp_layer_init, NULL,                              \
